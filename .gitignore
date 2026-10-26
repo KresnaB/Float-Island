@@ -1,0 +1,3 @@
+/target
+# Built installers go to GitHub Releases, not the repo.
+/dist
