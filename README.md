@@ -97,7 +97,7 @@ FloatIsland 0.2.0 adds a Linux build with the same island, panel and tray menu.
 
 | Desktop | How the island is placed | Tray menu |
 |---|---|---|
-| KDE Plasma (Wayland) | wlr-layer-shell | built in |
+| KDE Plasma (Wayland) | wlr-layer-shell (XWayland if `gtk4-layer-shell` isn't installed) | built in |
 | Hyprland, Sway and other wlroots compositors | wlr-layer-shell | needs a bar with a tray, e.g. waybar |
 | GNOME (Wayland or X11) | through XWayland as an always-on-top dock window, because GNOME has no layer-shell | needs the *AppIndicator and KStatusNotifierItem Support* extension (preinstalled on Ubuntu) |
 
@@ -105,11 +105,12 @@ Without a tray, right-click the island to quit.
 
 **Install**
 
-1. Install the runtime libraries, plus `ddcutil` if you want external monitor brightness:
+1. Install the runtime libraries. `gtk4-layer-shell` is optional but gives native placement on KDE/Hyprland/Sway (without it the island runs through XWayland); `ddcutil` is optional, for external monitor brightness:
 
    | Distro | Command |
    |---|---|
-   | Ubuntu 24.04+ / Debian | `sudo apt install libgtk-4-1 libgtk4-layer-shell0 libdbus-1-3 ddcutil` |
+   | Ubuntu 24.04 | `sudo apt install libgtk-4-1 libdbus-1-3 ddcutil` |
+   | Ubuntu 25.04+ / Debian 13 | `sudo apt install libgtk-4-1 libgtk4-layer-shell0 libdbus-1-3 ddcutil` |
    | Fedora | `sudo dnf install gtk4 gtk4-layer-shell dbus-libs ddcutil` |
    | Arch | `sudo pacman -S gtk4 gtk4-layer-shell dbus ddcutil` |
 
@@ -172,7 +173,7 @@ On **Linux** the same structure uses:
 
 | Feature | Source |
 |---|---|
-| Window | GTK4 window drawn with cairo + pango. wlr-layer-shell (`gtk4-layer-shell`) on KDE and wlroots compositors; on GNOME an X11 dock window (`_NET_WM_WINDOW_TYPE_DOCK`, above, sticky) through XWayland. The input region is the pill, so the rest is click-through. |
+| Window | GTK4 window drawn with cairo + pango. wlr-layer-shell on KDE and wlroots compositors (`gtk4-layer-shell`, loaded at runtime through `LD_PRELOAD` because it must load before libwayland-client, so it stays optional); on GNOME an X11 dock window (`_NET_WM_WINDOW_TYPE_DOCK`, above, sticky) through XWayland. The input region is the pill, so the rest is click-through. |
 | CPU / RAM | `/proc/stat`, `/proc/meminfo` |
 | GPU | `/sys/class/drm/*/device/gpu_busy_percent` (AMD, Intel Xe) or NVML (NVIDIA, loaded at runtime) |
 | Media | MPRIS over D-Bus |
@@ -231,7 +232,7 @@ Make an installer: copy the built exe with a `FloatIsland-Setup-` prefix.
 cp target/release/FloatIsland.exe dist/FloatIsland-Setup-0.2.0.exe
 ```
 
-**On Linux**, install the development packages first (Ubuntu: `sudo apt install libgtk-4-dev libgtk4-layer-shell-dev libdbus-1-dev pkg-config`), then:
+**On Linux**, install the development packages first (Ubuntu: `sudo apt install libgtk-4-dev libdbus-1-dev pkg-config`), then:
 
 ```bash
 cargo build --release

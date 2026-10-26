@@ -30,9 +30,9 @@ if [ -n "$MISSING" ]; then
     echo "Missing libraries:" >&2
     echo "$MISSING" | sed 's/^/  /' >&2
     echo "Install them, for example:" >&2
-    echo "  Ubuntu/Debian: sudo apt install libgtk-4-1 libgtk4-layer-shell0 libdbus-1-3" >&2
-    echo "  Fedora:        sudo dnf install gtk4 gtk4-layer-shell dbus-libs" >&2
-    echo "  Arch:          sudo pacman -S gtk4 gtk4-layer-shell dbus" >&2
+    echo "  Ubuntu/Debian: sudo apt install libgtk-4-1 libdbus-1-3" >&2
+    echo "  Fedora:        sudo dnf install gtk4 dbus-libs" >&2
+    echo "  Arch:          sudo pacman -S gtk4 dbus" >&2
     exit 1
 fi
 
@@ -69,6 +69,16 @@ if [ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ] && [ "$AUTOSTART" = 1 ]; then
     echo "Hyprland doesn't run XDG autostart entries. Add this to ~/.config/hypr/hyprland.conf:"
     echo "  exec-once = $BIN_DIR/floatisland"
 fi
+case "$DESKTOP" in
+    *GNOME*) ;;
+    *)
+        if [ -n "${WAYLAND_DISPLAY:-}" ] && ! ldconfig -p 2>/dev/null | grep -q libgtk4-layer-shell; then
+            echo
+            echo "Tip: install gtk4-layer-shell for native placement on KDE/Hyprland/Sway"
+            echo "(Arch/Fedora: gtk4-layer-shell, Debian 13 / Ubuntu 25.04+: libgtk4-layer-shell0)."
+            echo "Without it the island runs through XWayland."
+        fi ;;
+esac
 if ! command -v ddcutil >/dev/null; then
     echo
     echo "Optional: install 'ddcutil' to control external monitor brightness (DDC/CI),"

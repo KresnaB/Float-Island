@@ -1,14 +1,16 @@
 // Linux front end: the same pill as the Windows build, drawn with cairo + pango in a GTK4 window.
-// Placement: wlr-layer-shell on KDE Plasma / Hyprland / Sway; GNOME (no layer-shell) runs the
-// window through XWayland as an always-on-top dock window. Tray via StatusNotifierItem (ksni).
+// Placement: wlr-layer-shell on KDE Plasma / Hyprland / Sway; GNOME (no layer-shell) and systems
+// without libgtk4-layer-shell run the window through XWayland as an always-on-top dock window.
+// Tray via StatusNotifierItem (ksni).
 mod data;
 
 use crate::common::*;
+use glib::translate::ToGlibPtr;
 use gtk::prelude::*;
 use gtk::{cairo, gdk, glib, pango};
 use gtk4 as gtk;
-use gtk4_layer_shell::{Edge, KeyboardMode, Layer, LayerShell};
 use std::cell::RefCell;
+use std::ffi::c_int;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex, mpsc};
 use std::time::{Duration, Instant};
@@ -227,10 +229,94 @@ impl ksni::Tray for Tray {
 
 // ---- window placement ----
 
-/// GNOME's compositor has no layer-shell; XWayland lets us place the window and keep it above.
-fn wants_x11() -> bool {
-    let desktop = std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_default().to_uppercase();
-    desktop.contains("GNOME") && std::env::var_os("WAYLAND_DISPLAY").is_some()
+// gtk4-layer-shell, loaded at runtime instead of linked: it must be preloaded ahead of
+// libwayland-client (see main), and systems without it (e.g. Ubuntu 24.04) fall back to
+// XWayland instead of failing to start.
+const LAYER_LIB: &str = "libgtk4-layer-shell.so.0";
+const LAYER_TOP: c_int = 2; // GTK_LAYER_SHELL_LAYER_TOP
+const EDGE_LEFT: c_int = 0;
+const EDGE_RIGHT: c_int = 1;
+const EDGE_TOP: c_int = 2;
+const EDGE_BOTTOM: c_int = 3;
+const PRELOADED: &str = "FLOATISLAND_LAYER_PRELOADED";
+
+type WinPtr = *mut gtk::ffi::GtkWindow;
+
+struct LayerShell(libloading::Library);
+
+impl LayerShell {
+    fn load() -> Option<LayerShell> {
+        unsafe { libloading::Library::new(LAYER_LIB).ok().map(LayerShell) }
+    }
+
+    fn call<F: Copy>(&self, name: &[u8]) -> Option<F> {
+        unsafe { self.0.get::<F>(name).ok().map(|s| *s) }
+    }
+
+    fn supported(&self) -> bool {
+        self.call::<unsafe extern "C" fn() -> c_int>(b"gtk_layer_is_supported\0").is_some_and(|f| unsafe { f() } != 0)
+    }
+
+    fn init(&self, w: WinPtr) {
+        unsafe {
+            if let Some(f) = self.call::<unsafe extern "C" fn(WinPtr)>(b"gtk_layer_init_for_window\0") {
+                f(w);
+            }
+            if let Some(f) = self.call::<unsafe extern "C" fn(WinPtr, *const std::ffi::c_char)>(b"gtk_layer_set_namespace\0") {
+                f(w, c"floatisland".as_ptr());
+            }
+            if let Some(f) = self.call::<unsafe extern "C" fn(WinPtr, c_int)>(b"gtk_layer_set_layer\0") {
+                f(w, LAYER_TOP);
+            }
+            if let Some(f) = self.call::<unsafe extern "C" fn(WinPtr, c_int)>(b"gtk_layer_set_keyboard_mode\0") {
+                f(w, 0); // GTK_LAYER_SHELL_KEYBOARD_MODE_NONE
+            }
+            if let Some(f) = self.call::<unsafe extern "C" fn(WinPtr, c_int)>(b"gtk_layer_set_exclusive_zone\0") {
+                f(w, 0);
+            }
+        }
+    }
+
+    fn anchor(&self, w: WinPtr, edge: c_int, on: bool) {
+        if let Some(f) = self.call::<unsafe extern "C" fn(WinPtr, c_int, c_int)>(b"gtk_layer_set_anchor\0") {
+            unsafe { f(w, edge, on as c_int) };
+        }
+    }
+}
+
+fn win_ptr(w: &gtk::ApplicationWindow) -> WinPtr {
+    w.upcast_ref::<gtk::Window>().to_glib_none().0
+}
+
+fn is_gnome() -> bool {
+    std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_default().to_uppercase().contains("GNOME")
+}
+
+/// Picks the backend before GTK starts. On a non-GNOME Wayland session with gtk4-layer-shell
+/// installed, re-exec once with it in LD_PRELOAD (it has to load before libwayland-client).
+/// Everything else goes through X11/XWayland, where the window can be placed and kept above.
+fn choose_backend() {
+    let wayland = std::env::var_os("WAYLAND_DISPLAY").is_some();
+    // SAFETY (env edits below): main thread, before GTK or any worker thread starts.
+    if std::env::var_os(PRELOADED).is_some() {
+        unsafe { std::env::remove_var("LD_PRELOAD") }; // don't leak into ddcutil / claude children
+        return;
+    }
+    if wayland && !is_gnome() && LayerShell::load().is_some() {
+        use std::os::unix::process::CommandExt;
+        if let Ok(exe) = std::env::current_exe() {
+            let preload = match std::env::var("LD_PRELOAD") {
+                Ok(p) if !p.is_empty() => format!("{LAYER_LIB}:{p}"),
+                _ => LAYER_LIB.to_string(),
+            };
+            let err = std::process::Command::new(exe).args(std::env::args_os().skip(1))
+                .env("LD_PRELOAD", preload).env(PRELOADED, "1").exec();
+            eprintln!("floatisland: re-exec with layer-shell failed ({err}), using XWayland");
+        }
+    }
+    if wayland {
+        unsafe { std::env::set_var("GDK_BACKEND", "x11") };
+    }
 }
 
 fn monitor_geometry() -> Option<gdk::Rectangle> {
@@ -266,6 +352,7 @@ struct Ui {
     window: gtk::ApplicationWindow,
     area: gtk::DrawingArea,
     placement: Placement,
+    layer: Option<LayerShell>,
     bottom: bool,
     cur: [f64; 3], // animated (width, height, radius)
     slot: f64,     // animated 0..1: indicator presence (text shift + icon fade)
@@ -341,11 +428,11 @@ impl Ui {
     fn place(&self) {
         match self.placement {
             Placement::Layer => {
-                let w = &self.window;
-                w.set_anchor(Edge::Top, !self.bottom);
-                w.set_anchor(Edge::Bottom, self.bottom);
-                w.set_anchor(Edge::Right, self.bottom);
-                w.set_anchor(Edge::Left, false);
+                let (Some(ls), w) = (&self.layer, win_ptr(&self.window)) else { return };
+                ls.anchor(w, EDGE_TOP, !self.bottom);
+                ls.anchor(w, EDGE_BOTTOM, self.bottom);
+                ls.anchor(w, EDGE_RIGHT, self.bottom);
+                ls.anchor(w, EDGE_LEFT, false);
             }
             Placement::X11 => {
                 let Some(g) = monitor_geometry() else { return };
@@ -685,12 +772,9 @@ fn build(app: &gtk::Application) {
         gtk::style_context_add_provider_for_display(&display, &css, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION);
     }
 
-    let placement = if gtk4_layer_shell::is_supported() {
-        window.init_layer_shell();
-        window.set_layer(Layer::Top);
-        window.set_namespace(Some("floatisland"));
-        window.set_keyboard_mode(KeyboardMode::None);
-        window.set_exclusive_zone(0);
+    let layer = LayerShell::load().filter(|l| l.supported());
+    let placement = if let Some(ls) = &layer {
+        ls.init(win_ptr(&window));
         Placement::Layer
     } else if gdk::Display::default().is_some_and(|d| d.downcast_ref::<gdk4_x11::X11Display>().is_some()) {
         Placement::X11
@@ -709,6 +793,7 @@ fn build(app: &gtk::Application) {
         window: window.clone(),
         area: area.clone(),
         placement,
+        layer,
         bottom,
         cur: [236.0, 34.0, 17.0],
         slot: 0.0,
@@ -895,10 +980,7 @@ fn build(app: &gtk::Application) {
 }
 
 pub fn main() {
-    if wants_x11() {
-        // SAFETY: single-threaded at this point, before GTK or any worker thread starts.
-        unsafe { std::env::set_var("GDK_BACKEND", "x11") };
-    }
+    choose_backend();
     let app = gtk::Application::builder().application_id(APP_ID).build();
     app.connect_activate(build);
     app.run_with_args::<&str>(&[]);

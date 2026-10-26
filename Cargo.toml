@@ -15,8 +15,8 @@ winresource = "0.1"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 gtk4 = "0.11"
-gtk4-layer-shell = "0.8"   # KDE Plasma, Hyprland, Sway (wlr-layer-shell)
-gdk4-x11 = "0.11"          # GNOME: runs through XWayland
+libloading = "0.8"         # gtk4-layer-shell is loaded at runtime (optional on the user's system)
+gdk4-x11 = "0.11"          # GNOME / no layer-shell: runs through XWayland
 x11rb = "0.14"
 pangocairo = "0.22"
 ksni = { version = "0.3", default-features = false, features = ["blocking", "async-io"] }
