@@ -1,6 +1,7 @@
 """Draws the FloatIsland logo: a black island pill floating over a sky-to-sea gradient.
 
-    python assets/make_icon.py   ->  assets/icon.ico (16..256 px) + assets/logo.png (512 px)
+    python assets/make_icon.py   ->  assets/icon.ico (16..256 px), assets/logo.png (512 px)
+                                     and assets/tray-32.argb (Linux tray icon, raw ARGB32)
 """
 from pathlib import Path
 
@@ -47,6 +48,10 @@ def main():
     big.resize((512, 512), Image.LANCZOS).save(HERE / "logo.png")
     sizes = [256, 128, 64, 48, 32, 24, 16]
     big.resize((256, 256), Image.LANCZOS).save(HERE / "icon.ico", sizes=[(s, s) for s in sizes])
+    # StatusNotifierItem pixmap: ARGB32 in network byte order, embedded by src/linux/mod.rs.
+    rgba = big.resize((32, 32), Image.LANCZOS).tobytes()
+    argb = bytes(b for i in range(0, len(rgba), 4) for b in (rgba[i + 3], *rgba[i : i + 3]))
+    (HERE / "tray-32.argb").write_bytes(argb)
 
 
 if __name__ == "__main__":

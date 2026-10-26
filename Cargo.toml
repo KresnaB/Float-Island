@@ -1,8 +1,8 @@
 [package]
 name = "float-island"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
-description = "A lightweight Dynamic Island-style status pill for Windows: system stats, media, notifications, Claude usage and monitor brightness."
+description = "A lightweight Dynamic Island-style status pill for Windows and Linux: system stats, media, notifications, Claude usage and monitor brightness."
 license = "MIT"
 repository = "https://github.com/KresnaB/Float-Island"
 
@@ -13,7 +13,20 @@ path = "src/main.rs"
 [build-dependencies]
 winresource = "0.1"
 
-[dependencies.windows]
+[target.'cfg(target_os = "linux")'.dependencies]
+gtk4 = "0.11"
+gtk4-layer-shell = "0.8"   # KDE Plasma, Hyprland, Sway (wlr-layer-shell)
+gdk4-x11 = "0.11"          # GNOME: runs through XWayland
+x11rb = "0.14"
+pangocairo = "0.22"
+ksni = { version = "0.3", default-features = false, features = ["blocking", "async-io"] }
+mpris = "2"
+dbus = "0.9"
+ureq = "3"
+serde_json = "1"
+nvml-wrapper = "0.13"      # loads libnvidia-ml at runtime; absent = no NVIDIA GPU stats
+
+[target.'cfg(windows)'.dependencies.windows]
 version = "0.62"
 features = [
     "Foundation",

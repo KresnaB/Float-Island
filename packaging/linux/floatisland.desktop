@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=FloatIsland
+Comment=Dynamic Island-style status pill: system stats, media, notifications, Claude usage, brightness
+Exec=floatisland
+Icon=floatisland
+Terminal=false
+Categories=Utility;System;Monitor;
+StartupNotify=false
+X-GNOME-Autostart-enabled=true
