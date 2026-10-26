@@ -71,8 +71,9 @@ pub fn spawn(state: Arc<Mutex<State>>, rx: mpsc::Receiver<Cmd>) {
             was_busy = sessions.iter().map(|(i, s)| (i.clone(), s.busy)).collect();
 
             let usage = (Instant::now() >= next_usage).then(|| {
-                next_usage = Instant::now() + Duration::from_secs(300);
-                claude_usage()
+                let u = claude_usage();
+                next_usage = Instant::now() + Duration::from_secs(usage_retry_secs(&u));
+                u
             });
             let media = players.as_ref().and_then(media);
             let (c, r, g) = (cpu.sample(), ram(), gpu.sample());
@@ -378,7 +379,7 @@ fn token() -> Option<(String, f64)> {
 
 // ponytail: relies on `claude auth status` refreshing ~/.claude/.credentials.json (observed, not documented)
 fn refresh_token() {
-    let _ = Command::new("claude").args(["auth", "status"]).output();
+    let _ = claude_cli().args(["auth", "status"]).output();
 }
 
 fn claude_usage() -> Result<Usage, String> {

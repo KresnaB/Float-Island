@@ -92,8 +92,9 @@ pub fn spawn(state: Arc<Mutex<State>>, rx: mpsc::Receiver<Cmd>, wake: impl Fn() 
             }
 
             let usage = (Instant::now() >= next_usage).then(|| {
-                next_usage = Instant::now() + Duration::from_secs(300);
-                claude_usage()
+                let u = claude_usage();
+                next_usage = Instant::now() + Duration::from_secs(usage_retry_secs(&u));
+                u
             });
 
             // Re-scan monitors (hot-plug, brightness changed from the monitor's own buttons).
@@ -383,7 +384,7 @@ fn token() -> Option<(String, f64)> {
 // ponytail: relies on `claude auth status` refreshing ~/.claude/.credentials.json (observed, not documented);
 // replace with a real OAuth refresh if that ever stops working.
 fn refresh_token() {
-    let _ = std::process::Command::new("claude")
+    let _ = claude_cli()
         .args(["auth", "status"])
         .creation_flags(0x0800_0000) // CREATE_NO_WINDOW
         .output();

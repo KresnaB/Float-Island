@@ -1,6 +1,6 @@
 [package]
 name = "float-island"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
 description = "A lightweight Dynamic Island-style status pill for Windows and Linux: system stats, media, notifications, Claude usage and monitor brightness."
 license = "MIT"
