@@ -105,14 +105,19 @@ Without a tray, right-click the island to quit.
 
 **Install**
 
-1. Install the runtime libraries. `gtk4-layer-shell` is optional but gives native placement on KDE/Hyprland/Sway (without it the island runs through XWayland); `ddcutil` is optional, for external monitor brightness:
+The prebuilt binary is built on Ubuntu 24.04 and needs **glibc 2.39 or newer** (check with `ldd --version`). That covers Ubuntu 24.04+, Debian 13, Linux Mint 22, Pop!_OS 24.04, Fedora 40+, Arch and its derivatives, and openSUSE Tumbleweed. On older releases (Debian 12, Ubuntu 22.04, Linux Mint 21, …) [build it from source](#build-on-linux) instead.
+
+1. Install the runtime libraries. GTK 4 and D-Bus are required. `gtk4-layer-shell` is optional but gives native placement on KDE/Hyprland/Sway (without it the island runs through XWayland). `ddcutil` is optional, for external monitor brightness.
 
    | Distro | Command |
    |---|---|
-   | Ubuntu 24.04 | `sudo apt install libgtk-4-1 libdbus-1-3 ddcutil` |
-   | Ubuntu 25.04+ / Debian 13 | `sudo apt install libgtk-4-1 libgtk4-layer-shell0 libdbus-1-3 ddcutil` |
+   | Ubuntu 24.04, Linux Mint 22, Pop!_OS 24.04 | `sudo apt install libgtk-4-1 libdbus-1-3 ddcutil` |
+   | Ubuntu 25.04+, Debian 13 | `sudo apt install libgtk-4-1 libgtk4-layer-shell0 libdbus-1-3 ddcutil` |
    | Fedora | `sudo dnf install gtk4 gtk4-layer-shell dbus-libs ddcutil` |
-   | Arch | `sudo pacman -S gtk4 gtk4-layer-shell dbus ddcutil` |
+   | Arch, Manjaro, EndeavourOS | `sudo pacman -S gtk4 gtk4-layer-shell dbus ddcutil` |
+   | openSUSE Tumbleweed | `sudo zypper install gtk4 ddcutil` (`gtk4-layer-shell` is optional) |
+
+   Ubuntu 24.04 and its derivatives don't ship `gtk4-layer-shell`; there the island always runs through XWayland.
 
 2. Download **`FloatIsland-<version>-linux-x86_64.tar.gz`** from the [latest release](https://github.com/KresnaB/Float-Island/releases/latest), extract it and run the installer:
 
@@ -232,9 +237,20 @@ Make an installer: copy the built exe with a `FloatIsland-Setup-` prefix.
 cp target/release/FloatIsland.exe dist/FloatIsland-Setup-0.2.0.exe
 ```
 
-**On Linux**, install the development packages first (Ubuntu: `sudo apt install libgtk-4-dev libdbus-1-dev pkg-config`), then:
+<a id="build-on-linux"></a>**On Linux**, install [Rust](https://rustup.rs/) and the development packages for your distro:
+
+| Distro | Command |
+|---|---|
+| Debian, Ubuntu, Linux Mint, Pop!_OS | `sudo apt install build-essential pkg-config libgtk-4-dev libdbus-1-dev` |
+| Fedora | `sudo dnf install gcc pkgconf-pkg-config gtk4-devel dbus-devel` |
+| Arch, Manjaro, EndeavourOS | `sudo pacman -S base-devel gtk4 dbus` |
+| openSUSE | `sudo zypper install gcc pkg-config gtk4-devel dbus-1-devel` |
+
+Then build and install (works on older releases too, e.g. Debian 12 or Ubuntu 22.04, as long as GTK 4 is available):
 
 ```bash
+git clone https://github.com/KresnaB/Float-Island.git
+cd Float-Island
 cargo build --release
 ```
 
@@ -242,7 +258,7 @@ cargo build --release
 ./packaging/linux/install.sh
 ```
 
-Run from the repository, the installer picks up `target/release/FloatIsland`. CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) builds and tests both platforms and packages the Linux tarball.
+Run from the repository, the installer picks up `target/release/FloatIsland`. `gtk4-layer-shell` isn't needed to build: it's loaded at runtime when present. CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) builds and tests both platforms and packages the Linux tarball.
 
 Change the logo: edit [`assets/make_icon.py`](assets/make_icon.py) (needs Python with Pillow) and regenerate `assets/icon.ico` and `assets/logo.png`:
 
@@ -268,7 +284,7 @@ assets/              Logo (PNG), icon (ICO), tray pixmap and the script that dra
 ## Known limitations
 
 - **Windows**: Windows 11 only in practice: the icons use *Segoe Fluent Icons*, which Windows 10 doesn't ship. Tested on Windows 11 at 100% scaling.
-- **Linux**: built and unit-tested in CI, but not yet tried on every desktop. Please [open an issue](https://github.com/KresnaB/Float-Island/issues) with your desktop and distro if something looks off. The binary is built on Ubuntu 24.04 and needs glibc 2.39 or newer. Hiding for fullscreen apps is left to the compositor, and the "hide for a maximized browser" rule is Windows-only. On GNOME the island goes through XWayland, so it can look slightly soft with fractional scaling.
+- **Linux**: built and unit-tested in CI, but not yet tried on every desktop. Please [open an issue](https://github.com/KresnaB/Float-Island/issues) with your desktop and distro if something looks off. The prebuilt binary needs glibc 2.39 or newer; older distros have to build from source. Hiding for fullscreen apps is left to the compositor, and the "hide for a maximized browser" rule is Windows-only. On GNOME the island goes through XWayland, so it can look slightly soft with fractional scaling.
 - **Primary monitor only**: the island lives on the main monitor; DPI is read once at startup.
 - **Brightness** works for external monitors with DDC/CI enabled. Laptop built-in panels (which need WMI) are not supported yet. Monitors are labelled by position (*Utama* = main, *Kiri* = left, …) because Windows reports them as "Generic PnP Monitor".
 - **Claude quota** uses an undocumented endpoint and Claude Code's login, so it may break if those change. It shows the account Claude Code (CLI) is logged into, which can differ from the Claude desktop app's account. Run `claude auth login` with the same account to match them.

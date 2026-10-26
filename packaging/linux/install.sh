@@ -33,6 +33,8 @@ if [ -n "$MISSING" ]; then
     echo "  Ubuntu/Debian: sudo apt install libgtk-4-1 libdbus-1-3" >&2
     echo "  Fedora:        sudo dnf install gtk4 dbus-libs" >&2
     echo "  Arch:          sudo pacman -S gtk4 dbus" >&2
+    echo "  openSUSE:      sudo zypper install gtk4" >&2
+    echo "If a library is present but too old (glibc), build from source: see README." >&2
     exit 1
 fi
 
