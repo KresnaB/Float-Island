@@ -57,6 +57,27 @@ pub enum Cmd {
     Brightness(usize, u32),
 }
 
+/// The `claude` CLI as a standalone process. When the island was started from inside a Claude
+/// Code session it inherits that session's CLAUDE_* / ANTHROPIC_* variables (for example
+/// CLAUDE_CODE_SDK_HAS_HOST_AUTH_REFRESH), which make the CLI leave token refresh to that host
+/// instead of refreshing ~/.claude/.credentials.json itself.
+pub fn claude_cli() -> std::process::Command {
+    let mut cmd = std::process::Command::new("claude");
+    for (k, _) in std::env::vars_os() {
+        let k = k.to_string_lossy();
+        if k.starts_with("CLAUDE") || k.starts_with("ANTHROPIC") {
+            cmd.env_remove(&*k);
+        }
+    }
+    cmd
+}
+
+/// Seconds until the next quota fetch: soon after a failure (e.g. a token Claude Code hasn't
+/// refreshed yet), every 5 minutes otherwise.
+pub fn usage_retry_secs<T, E>(r: &Result<T, E>) -> u64 {
+    if r.is_ok() { 300 } else { 60 }
+}
+
 pub fn limit_label(kind: &str, model: Option<&str>) -> String {
     match (kind, model) {
         ("session", _) => "Sesi 5 jam".into(),
@@ -103,7 +124,18 @@ pub fn parse_iso(s: &str) -> Option<i64> {
 
 #[cfg(test)]
 mod tests {
-    use super::{limit_label, parse_iso};
+    use super::{claude_cli, limit_label, parse_iso, usage_retry_secs};
+    #[test]
+    fn claude_cli_drops_session_env() {
+        // SAFETY: no other test reads or writes the environment.
+        unsafe { std::env::set_var("CLAUDE_CODE_SDK_HAS_HOST_AUTH_REFRESH", "1") };
+        let cmd = claude_cli();
+        let removed: Vec<_> = cmd.get_envs().filter(|(_, v)| v.is_none()).map(|(k, _)| k.to_owned()).collect();
+        assert!(removed.iter().any(|k| k == "CLAUDE_CODE_SDK_HAS_HOST_AUTH_REFRESH"));
+        assert!(!removed.iter().any(|k| k == "PATH"));
+        assert_eq!(usage_retry_secs(&Ok::<(), ()>(())), 300);
+        assert_eq!(usage_retry_secs(&Err::<(), ()>(())), 60);
+    }
     #[test]
     fn labels() {
         assert_eq!(limit_label("session", None), "Sesi 5 jam");
