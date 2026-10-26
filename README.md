@@ -5,13 +5,13 @@
 <h1 align="center">FloatIsland</h1>
 
 <p align="center">
-  A tiny, Dynamic Island–inspired status pill for Windows.<br>
+  A tiny, Dynamic Island–inspired status pill for Windows and Linux.<br>
   System stats, media controls, notifications, Claude usage and monitor brightness, in one native window.
 </p>
 
 <p align="center">
   <a href="https://github.com/KresnaB/Float-Island/releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/KresnaB/Float-Island"></a>
-  <img alt="Platform" src="https://img.shields.io/badge/platform-Windows%2011-0078D4">
+  <img alt="Platform" src="https://img.shields.io/badge/platform-Windows%2011%20%7C%20Linux-0078D4">
   <img alt="Rust" src="https://img.shields.io/badge/made%20with-Rust-orange">
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-green"></a>
 </p>
@@ -20,7 +20,7 @@
 
 FloatIsland is a black pill that floats over your desktop. Collapsed, it shows CPU, RAM and GPU load. Hover over it to open a panel with the media that's playing, recent notifications, your Claude quota and a brightness slider for each monitor. When a notification arrives, the pill briefly grows to show it.
 
-It is written in Rust against the raw Win32 and WinRT APIs: no Electron, no WebView, no .NET runtime and no GPU driver load. The whole app is a single ~420 KB exe that uses about **15–19 MB of RAM** and **~0.1% CPU**.
+It is written in Rust. On Windows it talks to the raw Win32 and WinRT APIs: no Electron, no WebView, no .NET runtime and no GPU driver load. The whole app is a single ~420 KB exe that uses about **15–19 MB of RAM** and **~0.1% CPU**. On Linux the same island is drawn with GTK4 and runs on **KDE Plasma, Hyprland and GNOME** (see [Linux](#linux)).
 
 > The UI text is in Indonesian (Bahasa Indonesia).
 
@@ -29,6 +29,7 @@ It is written in Rust against the raw Win32 and WinRT APIs: no Electron, no WebV
 - [Features](#features)
 - [Resource usage](#resource-usage)
 - [Install](#install)
+- [Linux](#linux)
 - [Using FloatIsland](#using-floatisland)
 - [How it works](#how-it-works)
 - [Privacy](#privacy)
@@ -88,6 +89,56 @@ The setup is the app itself: when the exe's file name starts with `FloatIsland-S
 
 **Uninstall:** *Settings → Apps → Installed apps → FloatIsland → Uninstall*. This stops the island and removes the program files, the Start Menu shortcut, autostart and the Installed apps entry.
 
+## Linux
+
+FloatIsland 0.2.0 adds a Linux build with the same island, panel and tray menu.
+
+**Supported desktops**
+
+| Desktop | How the island is placed | Tray menu |
+|---|---|---|
+| KDE Plasma (Wayland) | wlr-layer-shell (XWayland if `gtk4-layer-shell` isn't installed) | built in |
+| Hyprland, Sway and other wlroots compositors | wlr-layer-shell | needs a bar with a tray, e.g. waybar |
+| GNOME (Wayland or X11) | through XWayland as an always-on-top dock window, because GNOME has no layer-shell | needs the *AppIndicator and KStatusNotifierItem Support* extension (preinstalled on Ubuntu) |
+
+Without a tray, right-click the island to quit.
+
+**Install**
+
+The prebuilt binary is built on Ubuntu 24.04 and needs **glibc 2.39 or newer** (check with `ldd --version`). That covers Ubuntu 24.04+, Debian 13, Linux Mint 22, Pop!_OS 24.04, Fedora 40+, Arch and its derivatives, and openSUSE Tumbleweed. On older releases (Debian 12, Ubuntu 22.04, Linux Mint 21, …) [build it from source](#build-on-linux) instead.
+
+1. Install the runtime libraries. GTK 4 and D-Bus are required. `gtk4-layer-shell` is optional but gives native placement on KDE/Hyprland/Sway (without it the island runs through XWayland). `ddcutil` is optional, for external monitor brightness.
+
+   | Distro | Command |
+   |---|---|
+   | Ubuntu 24.04, Linux Mint 22, Pop!_OS 24.04 | `sudo apt install libgtk-4-1 libdbus-1-3 ddcutil` |
+   | Ubuntu 25.04+, Debian 13 | `sudo apt install libgtk-4-1 libgtk4-layer-shell0 libdbus-1-3 ddcutil` |
+   | Fedora | `sudo dnf install gtk4 gtk4-layer-shell dbus-libs ddcutil` |
+   | Arch, Manjaro, EndeavourOS | `sudo pacman -S gtk4 gtk4-layer-shell dbus ddcutil` |
+   | openSUSE Tumbleweed | `sudo zypper install gtk4 ddcutil` (`gtk4-layer-shell` is optional) |
+
+   Ubuntu 24.04 and its derivatives don't ship `gtk4-layer-shell`; there the island always runs through XWayland.
+
+2. Download **`FloatIsland-<version>-linux-x86_64.tar.gz`** from the [latest release](https://github.com/KresnaB/Float-Island/releases/latest), extract it and run the installer:
+
+   ```bash
+   tar xzf FloatIsland-0.2.0-linux-x86_64.tar.gz
+   ```
+
+   ```bash
+   ./FloatIsland-0.2.0-linux-x86_64/install.sh
+   ```
+
+   It installs for your user only (`~/.local/bin/floatisland`), adds an app launcher entry and an autostart entry, and starts the island. Pass `--no-autostart` to skip the autostart entry.
+
+3. **Hyprland** doesn't run XDG autostart entries: add `exec-once = ~/.local/bin/floatisland` to `~/.config/hypr/hyprland.conf`.
+
+**Uninstall:** run `~/.local/share/floatisland/uninstall.sh` (add `--purge` to also delete the saved position).
+
+**Brightness** works for external monitors through `ddcutil` (DDC/CI; your user may need to be in the `i2c` group: `sudo usermod -aG i2c $USER`, then log in again) and for laptop screens through systemd-logind, which needs no root.
+
+**Settings:** the position is saved in `~/.config/floatisland/position`.
+
 ## Using FloatIsland
 
 | Action | How |
@@ -123,7 +174,21 @@ Everything runs in one process: a UI thread that owns the window and a worker th
 | Hiding | `SHQueryUserNotificationState` (fullscreen / presentation / D3D fullscreen) plus a check for a maximized browser on the main monitor, triggered by `SetWinEventHook` foreground and location events |
 | Tray, autostart, install | `Shell_NotifyIconW`, `HKCU\...\Run`, `IShellLinkW` for the Start Menu shortcut, `HKCU\...\Uninstall` |
 
-Only one dependency is used at runtime: the [`windows`](https://crates.io/crates/windows) crate. [`winresource`](https://crates.io/crates/winresource) is a build-time dependency that embeds the icon and version info.
+On **Linux** the same structure uses:
+
+| Feature | Source |
+|---|---|
+| Window | GTK4 window drawn with cairo + pango. wlr-layer-shell on KDE and wlroots compositors (`gtk4-layer-shell`, loaded at runtime through `LD_PRELOAD` because it must load before libwayland-client, so it stays optional); on GNOME an X11 dock window (`_NET_WM_WINDOW_TYPE_DOCK`, above, sticky) through XWayland. The input region is the pill, so the rest is click-through. |
+| CPU / RAM | `/proc/stat`, `/proc/meminfo` |
+| GPU | `/sys/class/drm/*/device/gpu_busy_percent` (AMD, Intel Xe) or NVML (NVIDIA, loaded at runtime) |
+| Media | MPRIS over D-Bus |
+| Notifications | A D-Bus monitor on `org.freedesktop.Notifications.Notify` (works with any notification daemon); dismiss calls `CloseNotification` |
+| Brightness | `ddcutil` (external monitors), systemd-logind `SetBrightness` (laptop backlight) |
+| Claude | The same `~/.claude` session files, credentials and quota endpoint as on Windows |
+| Tray | StatusNotifierItem via [`ksni`](https://crates.io/crates/ksni) |
+| Hiding | Left to the compositor: fullscreen windows cover the island's layer |
+
+On Windows only one dependency is used at runtime: the [`windows`](https://crates.io/crates/windows) crate. [`winresource`](https://crates.io/crates/winresource) is a build-time dependency that embeds the icon and version info.
 
 ## Privacy
 
@@ -169,8 +234,31 @@ cargo test --release
 Make an installer: copy the built exe with a `FloatIsland-Setup-` prefix.
 
 ```bash
-cp target/release/FloatIsland.exe dist/FloatIsland-Setup-0.1.0.exe
+cp target/release/FloatIsland.exe dist/FloatIsland-Setup-0.2.0.exe
 ```
+
+<a id="build-on-linux"></a>**On Linux**, install [Rust](https://rustup.rs/) and the development packages for your distro:
+
+| Distro | Command |
+|---|---|
+| Debian, Ubuntu, Linux Mint, Pop!_OS | `sudo apt install build-essential pkg-config libgtk-4-dev libdbus-1-dev` |
+| Fedora | `sudo dnf install gcc pkgconf-pkg-config gtk4-devel dbus-devel` |
+| Arch, Manjaro, EndeavourOS | `sudo pacman -S base-devel gtk4 dbus` |
+| openSUSE | `sudo zypper install gcc pkg-config gtk4-devel dbus-1-devel` |
+
+Then build and install (works on older releases too, e.g. Debian 12 or Ubuntu 22.04, as long as GTK 4 is available):
+
+```bash
+git clone https://github.com/KresnaB/Float-Island.git
+cd Float-Island
+cargo build --release
+```
+
+```bash
+./packaging/linux/install.sh
+```
+
+Run from the repository, the installer picks up `target/release/FloatIsland`. `gtk4-layer-shell` isn't needed to build: it's loaded at runtime when present. CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) builds and tests both platforms and packages the Linux tarball.
 
 Change the logo: edit [`assets/make_icon.py`](assets/make_icon.py) (needs Python with Pillow) and regenerate `assets/icon.ico` and `assets/logo.png`:
 
@@ -181,16 +269,22 @@ python assets/make_icon.py
 ## Project structure
 
 ```
-src/main.rs      Window, drawing, layout and animation, input, tray menu, positions, hiding rules
-src/data.rs      Worker thread: CPU/RAM/GPU, media, notifications, Claude sessions and quota, DDC/CI brightness
-src/install.rs   Self-installer, uninstaller, autostart and settings in the registry
-build.rs         Embeds the icon and version info into the exe
-assets/          Logo (PNG), icon (ICO) and the script that draws them
+src/main.rs          Entry point: picks the Windows or Linux front end
+src/common.rs        Shared state, commands and helpers (with tests)
+src/win/mod.rs       Windows: window, drawing, layout and animation, input, tray, positions, hiding rules
+src/win/data.rs      Windows worker: CPU/RAM/GPU, media, notifications, Claude, DDC/CI brightness
+src/win/install.rs   Windows self-installer, uninstaller, autostart, settings in the registry
+src/linux/mod.rs     Linux: GTK4 window, cairo/pango drawing, layer-shell / XWayland placement, tray
+src/linux/data.rs    Linux worker: /proc, sysfs/NVML, MPRIS, notification monitor, ddcutil/logind, Claude
+packaging/linux/     install.sh, uninstall.sh and the .desktop entry
+build.rs             Embeds the icon and version info into the Windows exe
+assets/              Logo (PNG), icon (ICO), tray pixmap and the script that draws them
 ```
 
 ## Known limitations
 
-- **Windows 11 only** in practice: the icons use *Segoe Fluent Icons*, which Windows 10 doesn't ship. Tested on Windows 11 at 100% scaling.
+- **Windows**: Windows 11 only in practice: the icons use *Segoe Fluent Icons*, which Windows 10 doesn't ship. Tested on Windows 11 at 100% scaling.
+- **Linux**: built and unit-tested in CI, but not yet tried on every desktop. Please [open an issue](https://github.com/KresnaB/Float-Island/issues) with your desktop and distro if something looks off. The prebuilt binary needs glibc 2.39 or newer; older distros have to build from source. Hiding for fullscreen apps is left to the compositor, and the "hide for a maximized browser" rule is Windows-only. On GNOME the island goes through XWayland, so it can look slightly soft with fractional scaling.
 - **Primary monitor only**: the island lives on the main monitor; DPI is read once at startup.
 - **Brightness** works for external monitors with DDC/CI enabled. Laptop built-in panels (which need WMI) are not supported yet. Monitors are labelled by position (*Utama* = main, *Kiri* = left, …) because Windows reports them as "Generic PnP Monitor".
 - **Claude quota** uses an undocumented endpoint and Claude Code's login, so it may break if those change. It shows the account Claude Code (CLI) is logged into, which can differ from the Claude desktop app's account. Run `claude auth login` with the same account to match them.
