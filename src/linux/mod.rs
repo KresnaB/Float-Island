@@ -586,7 +586,7 @@ impl Ui {
         // Only the pill takes input; the rest of the canvas is click-through.
         if let Some(surface) = self.window.surface() {
             let rect = cairo::RectangleInt::new(x as i32, top as i32, w.ceil() as i32, h.ceil() as i32);
-            surface.set_input_region(&cairo::Region::create_rectangle(&rect));
+            surface.set_input_region(Some(&cairo::Region::create_rectangle(&rect)));
         }
 
         let st = self.state.clone();
